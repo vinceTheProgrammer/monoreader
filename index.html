@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MonoReader</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --surface-color: #1e1e1e;
+            --text-color: #e0e0e0;
+            --secondary-text: #a0a0a0;
+            --accent-color: #bb86fc;
+            --highlight-color: #ff4081; /* Default highlight color */
+            --font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: var(--font-family);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* --- Header / Controls --- */
+        header {
+            background-color: var(--surface-color);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #333;
+            z-index: 10;
+        }
+
+        h1 {
+            font-size: 1.2rem;
+            font-weight: 500;
+            color: var(--accent-color);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 1.5rem;
+            align-items: center;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        label {
+            font-size: 0.9rem;
+            color: var(--secondary-text);
+        }
+
+        input[type="range"] {
+            cursor: pointer;
+            accent-color: var(--accent-color);
+        }
+
+        input[type="color"] {
+            border: none;
+            width: 30px;
+            height: 30px;
+            cursor: pointer;
+            background: none;
+        }
+
+        /* --- Main Display Area --- */
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        .rsvp-stage {
+            position: relative;
+            width: 80%;
+            max-width: 800px;
+            height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Guide lines (the two small red lines) */
+        .guides {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 4px;
+            height: 40px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            z-index: 1;
+            opacity: 0.3;
+            pointer-events: none;
+        }
+
+        .guide-line {
+            width: 100%;
+            height: 2px;
+            background-color: var(--highlight-color);
+        }
+
+        /* The Word Container */
+        #word-container {
+            font-size: 4rem;
+            font-weight: 600;
+            display: flex;
+            width: 100%;
+            height: 100%;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            cursor: default;
+        }
+
+        /* Flex method to center pivot letter */
+        .segment-left {
+            flex: 1;
+            text-align: right;
+            color: var(--secondary-text);
+            padding-right: 2px; /* tiny breathing room */
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .segment-pivot {
+            display: inline-block;
+            color: var(--highlight-color);
+            position: relative;
+            transition: color 0.2s;
+        }
+
+        .segment-right {
+            flex: 1;
+            text-align: left;
+            color: var(--secondary-text);
+            padding-left: 2px; /* tiny breathing room */
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        /* Placeholder text */
+        .placeholder-text {
+            position: absolute;
+            color: #333;
+            font-size: 3rem;
+            text-align: center;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* --- Progress Bar --- */
+        .progress-container {
+            width: 80%;
+            max-width: 800px;
+            height: 4px;
+            background-color: #333;
+            margin-top: 2rem;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        #progress-bar {
+            height: 100%;
+            width: 0%;
+            background-color: var(--accent-color);
+            transition: width 0.1s linear;
+        }
+
+        /* --- Playback Controls (Bottom) --- */
+        .playback-controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            opacity: 0.8;
+            transition: opacity 0.3s;
+        }
+        
+        .playback-controls:hover {
+            opacity: 1;
+        }
+
+        button {
+            background-color: var(--surface-color);
+            color: var(--text-color);
+            border: 1px solid #444;
+            padding: 0.8rem 1.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        button:hover {
+            background-color: #2c2c2c;
+            border-color: var(--accent-color);
+        }
+
+        button.primary {
+            background-color: var(--accent-color);
+            color: #000;
+            border: none;
+            font-weight: bold;
+        }
+
+        button.primary:hover {
+            opacity: 0.9;
+            background-color: var(--accent-color);
+        }
+
+        /* --- Input Overlay --- */
+        #input-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(18, 18, 18, 0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            backdrop-filter: blur(5px);
+        }
+
+        .modal {
+            background-color: var(--surface-color);
+            padding: 2rem;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 600px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .modal h2 {
+            margin-bottom: 0.5rem;
+        }
+
+        textarea {
+            width: 100%;
+            height: 200px;
+            background-color: #121212;
+            border: 1px solid #444;
+            color: var(--text-color);
+            padding: 1rem;
+            font-size: 1rem;
+            resize: none;
+            border-radius: 4px;
+            font-family: inherit;
+        }
+
+        textarea:focus {
+            outline: 2px solid var(--accent-color);
+            border-color: transparent;
+        }
+
+        .modal-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        /* Utility */
+        .hidden {
+            display: none !important;
+        }
+
+        .stats {
+            position: absolute;
+            bottom: 1rem;
+            right: 2rem;
+            color: var(--secondary-text);
+            font-size: 0.8rem;
+        }
+
+        @media (max-width: 600px) {
+            h1 span { display: none; }
+            .rsvp-stage { width: 95%; }
+            #word-container { font-size: 2.5rem; }
+            header { flex-direction: column; gap: 1rem; align-items: flex-start; }
+            .controls { width: 100%; justify-content: space-between; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M2 12h5"></path>
+                <path d="M4 17V7"></path>
+                <path d="M22 12h-5"></path>
+                <path d="M20 17V7"></path>
+                <path d="M12 2L2 22h20L12 2z"></path>
+            </svg>
+            <span>MonoReader</span>
+        </h1>
+        <div class="controls">
+            <div class="control-group">
+                <label for="wpm-slider">Speed: <span id="wpm-display">300</span> WPM</label>
+                <input type="range" id="wpm-slider" min="100" max="1000" step="50" value="300">
+            </div>
+            <div class="control-group">
+                <label for="color-picker">Highlight</label>
+                <input type="color" id="color-picker" value="#ff4081">
+            </div>
+            <button id="open-input-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                Text
+            </button>
+        </div>
+    </header>
+
+    <main>
+        <div class="rsvp-stage">
+            <!-- Visual Guides -->
+            <div class="guides">
+                <div class="guide-line"></div>
+                <div class="guide-line"></div>
+            </div>
+            
+            <!-- The Word Display -->
+            <div id="word-container">
+                <span class="segment-left"></span>
+                <span class="segment-pivot"></span>
+                <span class="segment-right"></span>
+            </div>
+
+            <div class="placeholder-text">Ready to Read</div>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="progress-container">
+            <div id="progress-bar"></div>
+        </div>
+
+        <div class="playback-controls">
+            <button id="restart-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6"></path><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+            </button>
+            <button id="play-pause-btn" class="primary">
+                <span id="play-icon">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                </span>
+                <span id="pause-icon" class="hidden">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+                </span>
+                <span id="play-text">Start</span>
+            </button>
+        </div>
+
+        <div class="stats">
+            Word: <span id="current-word-num">0</span> / <span id="total-words">0</span>
+        </div>
+    </main>
+
+    <!-- Text Input Overlay -->
+    <div id="input-overlay">
+        <div class="modal">
+            <h2>Paste your text</h2>
+            <p style="color: #888; font-size: 0.9rem; margin-bottom: 1rem;">Articles, books, or documents. The app will clean extra whitespace.</p>
+            <textarea id="text-input" placeholder="Paste text here to begin..."></textarea>
+            <div class="modal-buttons">
+                <button id="cancel-input-btn">Cancel</button>
+                <button id="save-text-btn" class="primary">Start Reading</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- State Management ---
+        const state = {
+            words: [],
+            currentIndex: 0,
+            isPlaying: false,
+            wpm: 300,
+            highlightColor: '#ff4081',
+            intervalId: null,
+            delay: 0
+        };
+
+        // --- DOM Elements ---
+        const els = {
+            wpmSlider: document.getElementById('wpm-slider'),
+            wpmDisplay: document.getElementById('wpm-display'),
+            colorPicker: document.getElementById('color-picker'),
+            inputOverlay: document.getElementById('input-overlay'),
+            textInput: document.getElementById('text-input'),
+            openInputBtn: document.getElementById('open-input-btn'),
+            saveTextBtn: document.getElementById('save-text-btn'),
+            cancelInputBtn: document.getElementById('cancel-input-btn'),
+            wordContainer: document.getElementById('word-container'),
+            segments: {
+                left: document.querySelector('.segment-left'),
+                pivot: document.querySelector('.segment-pivot'),
+                right: document.querySelector('.segment-right')
+            },
+            placeholder: document.querySelector('.placeholder-text'),
+            playPauseBtn: document.getElementById('play-pause-btn'),
+            playIcon: document.getElementById('play-icon'),
+            pauseIcon: document.getElementById('pause-icon'),
+            playText: document.getElementById('play-text'),
+            restartBtn: document.getElementById('restart-btn'),
+            progressBar: document.getElementById('progress-bar'),
+            currentWordNum: document.getElementById('current-word-num'),
+            totalWords: document.getElementById('total-words'),
+            root: document.documentElement
+        };
+
+        // --- ORP Algorithm ---
+        // Calculates the index of the Optimal Recognition Point (0-based)
+        function getORPIndex(word) {
+            const len = word.length;
+            if (len === 0) return 0;
+            if (len === 1) return 0;
+            
+            // Algorithm: Floor(L * 0.35) as derived from research
+            let index = Math.floor(len * 0.35);
+
+            // Constraints: Keep pivot slightly away from absolute edges for very short words
+            if (index < 1) index = 1; 
+            if (index >= len - 1) index = len - 2;
+            
+            return index;
+        }
+
+        // --- Core Functions ---
+
+        function parseText(text) {
+            // Replace newlines/multiple spaces with single space, trim
+            const cleanText = text.replace(/\s+/g, ' ').trim();
+            // Split into words, preserving punctuation attached to words
+            return cleanText.length > 0 ? cleanText.split(' ') : [];
+        }
+
+        function renderWord(word) {
+            if (!word) {
+                els.placeholder.classList.remove('hidden');
+                els.wordContainer.style.opacity = '0';
+                return;
+            }
+
+            els.placeholder.classList.add('hidden');
+            els.wordContainer.style.opacity = '1';
+
+            const pivotIdx = getORPIndex(word);
+            
+            // Split word into 3 parts
+            const leftPart = word.substring(0, pivotIdx);
+            const pivotChar = word.substring(pivotIdx, pivotIdx + 1);
+            const rightPart = word.substring(pivotIdx + 1);
+
+            // Update DOM
+            els.segments.left.textContent = leftPart;
+            els.segments.pivot.textContent = pivotChar;
+            els.segments.right.textContent = rightPart;
+        }
+
+        function updateProgress() {
+            const percent = (state.currentIndex / state.words.length) * 100;
+            els.progressBar.style.width = `${percent}%`;
+            els.currentWordNum.textContent = state.currentIndex;
+        }
+
+        function calculateDelay() {
+            // 60000 ms per minute / WPM
+            // Basic RSVP usually stays linear, but we can add length adjustments if desired
+            // For this implementation, we stick to linear WPM for predictable control.
+            return 60000 / state.wpm;
+        }
+
+        function nextWord() {
+            if (state.currentIndex >= state.words.length) {
+                stopReading();
+                state.currentIndex = 0; // Reset for next time
+                updateProgress();
+                renderWord(""); // Clear screen
+                els.playText.textContent = "Start";
+                return;
+            }
+
+            renderWord(state.words[state.currentIndex]);
+            updateProgress();
+            state.currentIndex++;
+        }
+
+        function startReading() {
+            if (state.words.length === 0) {
+                els.inputOverlay.classList.remove('hidden');
+                return;
+            }
+
+            state.isPlaying = true;
+            updatePlayButton();
+            
+            // If we finished, restart
+            if (state.currentIndex >= state.words.length) {
+                state.currentIndex = 0;
+            }
+
+            // Immediate render
+            nextWord(); 
+
+            // Start Loop
+            state.delay = calculateDelay();
+            state.intervalId = setInterval(nextWord, state.delay);
+        }
+
+        function stopReading() {
+            state.isPlaying = false;
+            updatePlayButton();
+            clearInterval(state.intervalId);
+        }
+
+        function togglePlayPause() {
+            if (state.isPlaying) {
+                stopReading();
+            } else {
+                startReading();
+            }
+        }
+
+        function updatePlayButton() {
+            if (state.isPlaying) {
+                els.playIcon.classList.add('hidden');
+                els.pauseIcon.classList.remove('hidden');
+                els.playText.textContent = "Pause";
+            } else {
+                els.playIcon.classList.remove('hidden');
+                els.pauseIcon.classList.add('hidden');
+                els.playText.textContent = "Resume";
+                if(state.currentIndex === 0) els.playText.textContent = "Start";
+            }
+        }
+
+        // --- Event Listeners ---
+
+        // WPM Slider
+        els.wpmSlider.addEventListener('input', (e) => {
+            state.wpm = parseInt(e.target.value);
+            els.wpmDisplay.textContent = state.wpm;
+            
+            // If playing, restart loop to apply new speed
+            if (state.isPlaying) {
+                clearInterval(state.intervalId);
+                state.delay = calculateDelay();
+                state.intervalId = setInterval(nextWord, state.delay);
+            }
+        });
+
+        // Color Picker
+        els.colorPicker.addEventListener('input', (e) => {
+            state.highlightColor = e.target.value;
+            els.root.style.setProperty('--highlight-color', state.highlightColor);
+        });
+
+        // Input Overlay
+        els.openInputBtn.addEventListener('click', () => {
+            // Pause if playing
+            const wasPlaying = state.isPlaying;
+            if(wasPlaying) stopReading();
+            els.inputOverlay.classList.remove('hidden');
+        });
+
+        els.cancelInputBtn.addEventListener('click', () => {
+            els.inputOverlay.classList.add('hidden');
+        });
+
+        els.saveTextBtn.addEventListener('click', () => {
+            const text = els.textInput.value;
+            const words = parseText(text);
+            if (words.length > 0) {
+                state.words = words;
+                state.currentIndex = 0;
+                els.totalWords.textContent = state.words.length;
+                els.inputOverlay.classList.add('hidden');
+                renderWord(""); // Clear
+                updateProgress();
+                // Auto start
+                startReading();
+            } else {
+                alert("Please enter some text.");
+            }
+        });
+
+        // Playback Controls
+        els.playPauseBtn.addEventListener('click', togglePlayPause);
+        
+        els.restartBtn.addEventListener('click', () => {
+            stopReading();
+            state.currentIndex = 0;
+            updateProgress();
+            renderWord(state.words[0]); // Show first word
+            els.playText.textContent = "Start";
+        });
+
+        // Keyboard Shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (els.inputOverlay.classList.contains('hidden')) {
+                if (e.code === 'Space') {
+                    e.preventDefault(); // Prevent scrolling
+                    togglePlayPause();
+                }
+                if (e.code === 'ArrowRight') {
+                    if (!state.isPlaying) {
+                         nextWord(); // manual step
+                         state.currentIndex--; // counteract increment in nextWord for manual step
+                    }
+                }
+                if (e.code === 'ArrowLeft') {
+                    if (!state.isPlaying && state.currentIndex > 0) {
+                        state.currentIndex -= 2;
+                        if(state.currentIndex < 0) state.currentIndex = 0;
+                        nextWord();
+                        state.currentIndex--; 
+                    }
+                }
+            } else {
+                // Escape to close modal
+                if (e.code === 'Escape') {
+                    els.inputOverlay.classList.add('hidden');
+                }
+            }
+        });
+
+        // --- Initialization ---
+        // Set default text
+        const defaultText = "Rapid Serial Visual Presentation is a technique used to show information quickly. Words flash in one spot, so your eyes don't have to move. This allows you to read faster by focusing on a single point.";
+        els.textInput.value = defaultText;
+        els.totalWords.textContent = parseText(defaultText).length;
+        
+        // Initialize styles
+        els.root.style.setProperty('--highlight-color', state.highlightColor);
+
+    </script>
+</body>
+</html>
